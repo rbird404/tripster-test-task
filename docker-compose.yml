@@ -4,14 +4,14 @@ name: hackathon
 services:
   app:
     build: .
-    command: sh ./scripts/start-dev.sh
+    command: sh ./scripts/start-prod.sh
     volumes:
       - ./:/src
       - static:/src/static:mode=777
     env_file:
       - .env
     ports:
-      - "8000:8000"
+      - "8000:9000"
     depends_on:
       - db
     networks:
