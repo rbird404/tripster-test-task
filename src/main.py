@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from src.auth.router import router as auth_router
 from src.users.router import router as users_router
+from src.publications.router import router as publications_router
 from src.config import app_configs, settings, STATIC_DIR
 from src.common.exceptions import DetailedHTTPException
 
@@ -42,5 +43,5 @@ async def http_exception_handler(request, exc):
 
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(users_router, prefix="/users", tags=["Users"])
-
+app.include_router(publications_router, prefix="/publications", tags=["Publications"])
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
