@@ -1,0 +1,85 @@
+version: '3.8'
+name: hackathon
+
+services:
+  app:
+    build: .
+    command: sh ./scripts/start-dev.sh
+    volumes:
+      - ./:/src
+      - static:/src/static:mode=777
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    networks:
+      my-ms:
+
+  db:
+    image: postgres:14
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    networks:
+      my-ms:
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    networks:
+      my-ms:
+
+  worker:
+    build: .
+    volumes:
+      - ./:/src
+    command: celery -A src.celery worker --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    networks:
+      my-ms:
+
+  flower:
+    build: .
+    volumes:
+      - ./:/src
+    command: celery -A src.celery flower
+    env_file:
+      - .env
+    ports:
+      - "5555:5555"
+    depends_on:
+      - db
+      - redis
+    networks:
+      my-ms:
+
+  beat:
+    build: .
+    command: celery -A src.celery beat --loglevel=info
+    volumes:
+      - ./:/src
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    networks:
+      my-ms:
+
+volumes:
+  pg_data:
+  static:
+
+networks:
+  my-ms:
+    driver: bridge
