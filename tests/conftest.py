@@ -1,75 +1,57 @@
-import asyncio
-from typing import AsyncGenerator, Generator
+import os
+from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
+from alembic.command import upgrade, downgrade
+
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from async_asgi_testclient import TestClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database.engine import async_session
+from testcontainers.postgres import PostgresContainer
+from alembic.config import Config as AlembicConfig
+from src.config import Config
 from src.main import app
-from src.publications.models import Publication
-from src.users.models import User
-
-
-@pytest.fixture(autouse=True, scope="session")
-def run_migrations() -> None:
-    import os
-
-    print("running migrations..")
-    os.system("alembic upgrade head")
 
 
 @pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+def init_postgres() -> PostgresContainer:
+    with PostgresContainer() as postgres:
+        os.environ["POSTGRES_HOST"] = postgres.get_container_host_ip()
+        os.environ["POSTGRES_PORT"] = postgres.get_exposed_port(5432)
+        os.environ["POSTGRES_DB"] = postgres.POSTGRES_DB
+        os.environ["POSTGRES_USER"] = postgres.POSTGRES_USER
+        os.environ["POSTGRES_PASSWORD"] = postgres.POSTGRES_PASSWORD
+        yield postgres
+
+
+@pytest.fixture(scope="session")
+def postgres_url(init_postgres: PostgresContainer) -> str:
+    return Config().get_db_url(async_=True)
+
+
+@pytest.fixture
+def migrations(postgres_url) -> None:
+    alembic_cfg = AlembicConfig("alembic.ini")
+    alembic_cfg.set_main_option("sqlalchemy.url", postgres_url)
+    upgrade(alembic_cfg, "head")
+    yield
+    downgrade(alembic_cfg, "base")
 
 
 @pytest_asyncio.fixture
-async def client() -> AsyncGenerator[TestClient, None]:
-    host, port = "127.0.0.1", "9000"
-    scope = {"client": (host, port)}
+async def db_session(migrations, postgres_url) -> AsyncSession:
+    async_engine = create_async_engine(postgres_url, echo=False)
 
-    async with TestClient(app, scope=scope) as client:
-        yield client
-
-
-@pytest_asyncio.fixture
-async def db_session() -> AsyncSession:
+    async_session = async_sessionmaker(
+        bind=async_engine,
+        expire_on_commit=False,
+        autoflush=False,
+    )
     async with async_session() as session:
         try:
             yield session
-        except:
+        except Exception:
             await session.rollback()
-            raise
         finally:
             await session.close()
-
-
-@pytest_asyncio.fixture
-async def credentials(client: TestClient) -> str:
-    resp = await client.post(
-        "/auth/token",
-        json={
-            "username": "test_user",
-            "password": "123Aa!",
-        },
-    )
-
-    resp_json = resp.json()
-    access_token = resp_json["details"]["access_token"]
-    return f"Bearer {access_token}"
-
-
-@pytest_asyncio.fixture
-async def publication(db_session: AsyncSession) -> Publication:
-    user = await db_session.scalar(
-        select(User).where(User.username == "test_user")
-    )
-    publication = Publication(content="test", creator_id=user.id)
-    db_session.add(publication)
-    await db_session.commit()
-    return publication

@@ -32,7 +32,7 @@ def upgrade() -> None:
     sa.Column('publication_id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('grade', sa.Boolean(), nullable=False),
-    sa.ForeignKeyConstraint(['publication_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['publication_id'], ['publications.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('publication_id', 'user_id')
