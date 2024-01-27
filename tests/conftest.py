@@ -1,17 +1,15 @@
 import os
-from typing import AsyncGenerator
-
 import pytest
 import pytest_asyncio
 from alembic.command import upgrade, downgrade
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from async_asgi_testclient import TestClient
+from starlette.testclient import TestClient
 
 from testcontainers.postgres import PostgresContainer
 from alembic.config import Config as AlembicConfig
 from src.config import Config
-from src.main import app
+from src.database.dependency import get_async_session
 
 
 @pytest.fixture(scope="session")
@@ -55,3 +53,20 @@ async def db_session(migrations, postgres_url) -> AsyncSession:
             await session.rollback()
         finally:
             await session.close()
+
+
+@pytest.fixture
+def client(db_session) -> TestClient:
+    from src.main import app
+
+    async def test_session():
+        try:
+            yield db_session
+        except Exception:
+            await db_session.rollback()
+        finally:
+            await db_session.close()
+
+    app.dependency_overrides[get_async_session] = test_session
+    with TestClient(app) as client:
+        yield client
