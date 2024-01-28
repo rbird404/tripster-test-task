@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any
 from pydantic import RedisDsn
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.constants import Environment
 
@@ -29,6 +29,8 @@ class Config(BaseSettings):
     CORS_HEADERS: list[str]
 
     APP_VERSION: str = "1"
+
+    model_config = SettingsConfigDict(env_file=".env", extra='ignore')
 
     def get_db_url(self, *, async_: bool = True) -> str:
         if async_:
