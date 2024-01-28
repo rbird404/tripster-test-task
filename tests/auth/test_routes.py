@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from fastapi import status
 
 from src.users.exceptions import UsernameTaken
-from src.users.models import User
+from tests.factories import UserFactory
 
 
 def test_register_user(client: TestClient) -> None:
@@ -20,11 +20,13 @@ def test_register_user(client: TestClient) -> None:
     assert resp_json["details"]["username"] == "test_user"
 
 
-def test_register_username_taken(client: TestClient, default_user) -> None:
+@pytest.mark.asyncio
+async def test_register_username_taken(client: TestClient) -> None:
+    user = UserFactory()
     resp = client.post(
         "/users",
         json={
-            "username": default_user["username"],
+            "username": user.username,
             "password": "123Aa!",
         },
     )
@@ -34,11 +36,16 @@ def test_register_username_taken(client: TestClient, default_user) -> None:
     assert resp_json["msg"] == UsernameTaken.DETAIL
 
 
-def test_user_login(client: TestClient, default_user) -> None:
+@pytest.mark.asyncio
+async def test_user_login(client: TestClient) -> None:
+    user = UserFactory()
+    user.set_password("123Aa!")
+    UserFactory.get_current_session().commit()
+
     resp = client.post(
         "/auth/token",
         json={
-            "username": "test_user",
+            "username": user.username,
             "password": "123Aa!",
         },
     )
@@ -55,14 +62,19 @@ def test_user_login(client: TestClient, default_user) -> None:
     resp_json = resp.json()
 
     assert resp.status_code == status.HTTP_200_OK
-    assert resp_json["details"]["username"] == "test_user"
+    assert resp_json["details"]["username"] == user.username
 
 
-def test_blocked_refresh_token_after_refresh(client: TestClient, default_user) -> None:
+@pytest.mark.asyncio
+async def test_blocked_refresh_token_after_refresh(client: TestClient) -> None:
+    user = UserFactory()
+    user.set_password("123Aa!")
+    UserFactory.get_current_session().commit()
+
     resp = client.post(
         "/auth/token",
         json={
-            "username": "test_user",
+            "username": user.username,
             "password": "123Aa!",
         },
     )
@@ -89,11 +101,16 @@ def test_blocked_refresh_token_after_refresh(client: TestClient, default_user) -
     assert resp.status_code != status.HTTP_200_OK
 
 
-def test_user_logout(client, default_user) -> None:
+@pytest.mark.asyncio
+async def test_user_logout(client) -> None:
+    user = UserFactory()
+    user.set_password("123Aa!")
+    UserFactory.get_current_session().commit()
+
     resp = client.post(
         "/auth/token",
         json={
-            "username": "test_user",
+            "username": user.username,
             "password": "123Aa!",
         },
     )
